@@ -28,25 +28,25 @@ def create_matrix(m, n, values):
             idx += 1
     return matrix
 
-def solve(A, B, pi, sequence):
+def solve(A, B, pi, O):
     N = len(A)  # Number of states
-    K = len(sequence)  # Length of the observation sequence
+    K = len(O)  # Length of the observation O
 
     # Initialize alpha matrix (forward probabilities)
     alpha = [[0 for _ in range(N)] for _ in range(K)]
 
     # Initialization step
     for i in range(N):
-        alpha[0][i] = B[i][sequence[0]] * pi[0][i]
+        alpha[0][i] = B[i][O[0]] * pi[0][i]
 
     # Recursion step
     for t in range(1, K):
         for i in range(N):
-            alpha[t][i] = B[i][sequence[t]] * sum(A[j][i] * alpha[t-1][j] for j in range(N))
+            alpha[t][i] = B[i][O[t]] * sum(A[j][i] * alpha[t-1][j] for j in range(N))
 
     # Termination step
-    p_sequence = sum(alpha[K-1][i] for i in range(N))
-    return p_sequence
+    p_O = sum(alpha[K-1][i] for i in range(N))
+    return p_O
 
 if __name__ == "__main__":
     import sys

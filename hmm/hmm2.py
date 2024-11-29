@@ -28,37 +28,33 @@ def create_matrix(m, n, values):
             idx += 1
     return matrix
 
-def solve_viterbi(A, B, pi, sequence):
-    num_states = len(A)  #number of states
-    num_observations = len(sequence)  #length of the observation sequence
+def solve_viterbi(A, B, pi, O):
+    N = len(A)  #number of states
+    K = len(O)  #length of the observation O
 
-    #initialize delta and psi matrices
-    delta = [[0 for _ in range(num_states)] for _ in range(num_observations)]
-    psi = [[0 for _ in range(num_states)] for _ in range(num_observations)]
+    # initialize delta
+    delta = [[0 for _ in range(N)] for _ in range(K)]
+    delta_idx = [[0 for _ in range(N)] for _ in range(K)]
 
-    #initialization
-    for i in range(num_states):
-        delta[0][i] = pi[0][i] * B[i][sequence[0]]
-        psi[0][i] = 0
+    # initialization step
+    for i in range(N):
+        delta[0][i] = B[i][O[0]] * pi[0][i]
+        delta_idx[0][i] = 0
 
-    #recursion
-    for t in range(1, num_observations):
-        for j in range(num_states):
-            max_val = max(delta[t-1][i] * A[i][j] for i in range(num_states))
-            delta[t][j] = max_val * B[j][sequence[t]]
-            psi[t][j] = max(range(num_states), key=lambda i: delta[t-1][i] * A[i][j])
-
-    #finalization
-    last_state = max(range(num_states), key=lambda i: delta[num_observations-1][i])
-
-    # Path backtracking
-    path = [0] * num_observations
-    path[num_observations-1] = last_state
-    for t in range(num_observations-2, -1, -1):
-        path[t] = psi[t+1][path[t+1]]
+    # recursion step
+    for t in range(1, K):
+        for i in range(N):
+            delta[t][i] = max(A[j][i] * delta[t-1][j] * B[i][O[t]] for j in range(N))
+            delta_idx[t][i] = max(range(N), key=lambda j: A[j][i] * delta[t-1][j] * B[i][O[t]])
+    
+    # termination step
+    path = [max(range(N), key=lambda i: delta[K-1][i])]
+    for t in range(K-1, 0, -1):
+        path.insert(0, delta_idx[t][path[0]])
 
     return path
 
+    
 if __name__ == "__main__":
     import sys
 
