@@ -30,7 +30,7 @@ def alpha_pass(A, B, pi, O):
         alpha[0][i] = pi[0][i] * B[i][O[0]]
         scalers[0] += alpha[0][i]
 
-    if scalers[0] == 0:
+    if scalers[0] <= 0:
         scalers[0] = epsilon  # Avoid division by zero
     scalers[0] = 1 / scalers[0]
     for i in range(N):
@@ -42,7 +42,7 @@ def alpha_pass(A, B, pi, O):
             alpha[t][i] = sum(alpha[t - 1][j] * A[j][i] for j in range(N)) * B[i][O[t]]
             scalers[t] += alpha[t][i]
 
-        if scalers[t] == 0:
+        if scalers[t] <= 0:
             scalers[t] = epsilon  # Avoid division by zero
         scalers[t] = 1 / scalers[t]
         for i in range(N):
@@ -69,7 +69,7 @@ def beta_pass(A, B, O, scalers):
     return beta
 
 def compute_log_likelihood(scalers):
-    return -sum(math.log(s + epsilon) for s in scalers)
+    return -sum(math.log(max(s, epsilon)) for s in scalers)
 
 def gamma_pass(A, B, pi, O):
     N = len(A)
@@ -118,75 +118,57 @@ def reestimate(A, B, pi, O):
 
     return new_A, new_B, new_pi
 
-def forward_algorithm(A, B, pi, O):
-    _, scalers = alpha_pass(A, B, pi, O)
-    return compute_log_likelihood(scalers)
+def solve(A, B, pi, O):
+    log_likelihood = float("-inf")
+    threshold = 1e-6
+    time_start = time.time()
+    timeout = 0.5
+    logs = []
 
-def viterbi(A, B, pi, O):
-    N = len(A)
-    T = len(O)
+    iter = 0
+    while True:
+        new_A, new_B, new_pi = reestimate(A, B, pi, O)
+        new_log_likelihood = compute_log_likelihood(alpha_pass(A, B, pi, O)[1])
+        logs.append(new_log_likelihood)
 
-    delta = [[0 for _ in range(N)] for _ in range(T)]
-    delta_idx = [[0 for _ in range(N)] for _ in range(T)]
+        if abs(new_log_likelihood - log_likelihood) < threshold or time.time() - time_start > timeout:
+            break
 
-    for i in range(N):
-        delta[0][i] = pi[0][i] * B[i][O[0]]
+        A, B, pi = new_A, new_B, new_pi
+        log_likelihood = new_log_likelihood
+        iter += 1
 
-    for t in range(1, T):
-        for i in range(N):
-            max_val, max_idx = max(
-                (delta[t - 1][j] * A[j][i], j) for j in range(N))
-            delta[t][i] = max_val * B[i][O[t]]
-            delta_idx[t][i] = max_idx
-
-    path = [0] * T
-    path[T - 1] = max(range(N), key=lambda i: delta[T - 1][i])
-    for t in range(T - 2, -1, -1):
-        path[t] = delta_idx[t + 1][path[t + 1]]
-
-    return path
+    return new_A, new_B, new_pi
 
 def generate_row_stochastic_matrix(m, n):
-    matrix = [[random.random() for _ in range(n)] for _ in range(m)]
+    values = [random.random() for _ in range(m * n)]
     for i in range(m):
-        row_sum = sum(matrix[i])
+        row_sum = sum(values[i * n:(i + 1) * n])
         for j in range(n):
-            matrix[i][j] /= row_sum
-    return matrix
+            values[i * n + j] /= row_sum
+    return create_matrix(m, n, values)
 
 class HMM:
-    def __init__(self, n_states, n_emissions):
-        self.n_states = n_states
-        self.n_emissions = n_emissions
-        self.PI = generate_row_stochastic_matrix(1, n_states)
-        self.A = generate_row_stochastic_matrix(n_states, n_states)
-        self.B = generate_row_stochastic_matrix(n_states, n_emissions)
+    def __init__(self, N, K):
+        self.N = N
+        self.K = K
+        self.pi = generate_row_stochastic_matrix(1, N)
+        self.A = generate_row_stochastic_matrix(N, N)
+        self.B = generate_row_stochastic_matrix(N, K)
 
     def update_model(self, observations):
-        self.A, self.B, self.PI = reestimate(self.A, self.B, self.PI, observations)
+        self.A, self.B, self.pi = solve(self.A, self.B, self.pi, observations)
 
     def get_probability(self, observations):
-        return forward_algorithm(self.A, self.B, self.PI, observations)
+        return compute_log_likelihood(alpha_pass(self.A, self.B, self.pi, observations)[1])
 
 class PlayerControllerHMM(PlayerControllerHMMAbstract):
-    """
-    In this function you should initialize the parameters you will need,
-    such as the initialization of models, or fishes, among others.
-    """
     def init_parameters(self):
-        self.models = [HMM(1, N_EMISSIONS) for _ in range(N_SPECIES)]
+        self.models = [HMM(2, N_EMISSIONS) for _ in range(N_SPECIES)]
         self.fishes_obs = [[] for _ in range(N_FISH)]
         self.fished_tested = [False] * N_FISH
 
     def guess(self, step, observations):
-        """
-        This method gets called on every iteration, providing observations.
-        Here the player should process and store this information,
-        and optionally make a guess by returning a tuple containing the fish index and the guess.
-        :param step: iteration number
-        :param observations: a list of N_FISH observations, encoded as integers
-        :return: None or a tuple (fish_id, fish_type)
-        """
         for i in range(N_FISH):
             if not self.fished_tested[i]:
                 self.fishes_obs[i].append(observations[i])
@@ -195,22 +177,13 @@ class PlayerControllerHMM(PlayerControllerHMMAbstract):
             return None
 
         fish_id = random.choice([i for i in range(N_FISH) if not self.fished_tested[i]])
-        best_prob, fish_type = max(
+        _, fish_type = max(
             (model.get_probability(self.fishes_obs[fish_id]), species)
             for species, model in enumerate(self.models)
         )
         return fish_id, fish_type
 
     def reveal(self, correct, fish_id, true_type):
-        """
-        This method gets called whenever a guess was made.
-        It informs the player about the guess result
-        and reveals the correct type of that fish.
-        :param correct: tells if the guess was correct
-        :param fish_id: fish's index
-        :param true_type: the correct type of the fish
-        :return:
-        """
         self.fished_tested[fish_id] = True
         if not correct:
             self.models[true_type].update_model(self.fishes_obs[fish_id])
