@@ -169,12 +169,24 @@ class HMM:
         return forward_algorithm(self.A, self.B, self.PI, observations)
 
 class PlayerControllerHMM(PlayerControllerHMMAbstract):
+    """
+    In this function you should initialize the parameters you will need,
+    such as the initialization of models, or fishes, among others.
+    """
     def init_parameters(self):
         self.models = [HMM(1, N_EMISSIONS) for _ in range(N_SPECIES)]
         self.fishes_obs = [[] for _ in range(N_FISH)]
         self.fished_tested = [False] * N_FISH
 
     def guess(self, step, observations):
+        """
+        This method gets called on every iteration, providing observations.
+        Here the player should process and store this information,
+        and optionally make a guess by returning a tuple containing the fish index and the guess.
+        :param step: iteration number
+        :param observations: a list of N_FISH observations, encoded as integers
+        :return: None or a tuple (fish_id, fish_type)
+        """
         for i in range(N_FISH):
             if not self.fished_tested[i]:
                 self.fishes_obs[i].append(observations[i])
@@ -190,6 +202,15 @@ class PlayerControllerHMM(PlayerControllerHMMAbstract):
         return fish_id, fish_type
 
     def reveal(self, correct, fish_id, true_type):
+        """
+        This method gets called whenever a guess was made.
+        It informs the player about the guess result
+        and reveals the correct type of that fish.
+        :param correct: tells if the guess was correct
+        :param fish_id: fish's index
+        :param true_type: the correct type of the fish
+        :return:
+        """
         self.fished_tested[fish_id] = True
         if not correct:
             self.models[true_type].update_model(self.fishes_obs[fish_id])
