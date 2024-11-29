@@ -29,25 +29,24 @@ def create_matrix(m, n, values):
     return matrix
 
 def solve(A, B, pi, sequence):
-    num_states = len(A)  # Number of states
-    num_observations = len(sequence)  # Length of the observation sequence
+    N = len(A)  # Number of states
+    K = len(sequence)  # Length of the observation sequence
 
     # Initialize alpha matrix (forward probabilities)
-    alpha = [[0 for _ in range(num_states)] for _ in range(num_observations)]
+    alpha = [[0 for _ in range(N)] for _ in range(K)]
 
     # Initialization step
-    for i in range(num_states):
-        alpha[0][i] = pi[0][i] * B[i][sequence[0]]
+    for i in range(N):
+        alpha[0][i] = B[i][sequence[0]] * pi[0][i]
 
     # Recursion step
-    for t in range(1, num_observations):
-        for j in range(num_states):
-            alpha[t][j] = sum(alpha[t-1][i] * A[i][j] for i in range(num_states)) * B[j][sequence[t]]
+    for t in range(1, K):
+        for i in range(N):
+            alpha[t][i] = B[i][sequence[t]] * sum(A[j][i] * alpha[t-1][j] for j in range(N))
 
     # Termination step
-    p_sequence = sum(alpha[num_observations-1][i] for i in range(num_states))
+    p_sequence = sum(alpha[K-1][i] for i in range(N))
     return p_sequence
-
 
 if __name__ == "__main__":
     import sys
@@ -68,10 +67,9 @@ if __name__ == "__main__":
     pi = create_matrix(m, n, list(map(float, third_line[2:])))
 
     # Sequence
-    fourth_line = sys.stdin.readline().strip()
-    m = int(fourth_line[0])
+    fourth_line = sys.stdin.readline().strip().split()
     sequence = list(map(int, fourth_line[1:]))
 
     # Solve the problem
     result = solve(A, B, pi, sequence)
-    print(result)
+    print(f"{result:.6f}")
