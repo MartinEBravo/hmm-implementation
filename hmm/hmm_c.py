@@ -139,20 +139,27 @@ def solve(A, B, pi, O):
     log_likelihood = -1e9
     time_start = time.time()
     timeout = 0.8
+    logs = []
+
+    iter = 0
 
     # Initialize new_A and new_B
     while True:
         new_A, new_B, new_pi = reestimate(A, B, pi, O)
         new_log_likelihood = compute_log_likelihood(alpha_pass(A, B, pi, O)[1])
+        logs.append(new_log_likelihood)
 
-        if new_log_likelihood - log_likelihood < 1e-6 or time.time() - time_start > timeout:
+        if new_log_likelihood - log_likelihood < 1e-6:
             break
 
         A = new_A
         B = new_B
         pi = new_pi
         log_likelihood = new_log_likelihood
+        iter += 1
 
+    print("Number of iterations:", iter)
+    print("Time taken:", time.time() - time_start)
     return new_A, new_B
 
 
@@ -163,7 +170,7 @@ def solve_N1000():
     # Import .in file
     with open(file_1, "r") as f:
         sequence = f.readline().strip().split()
-        O = [int(x) for x in sequence[1:]]
+        O = [int(x) for x in sequence[1:100]]
 
     A = [[0.54, 0.26, 0.20], [0.19, 0.53, 0.28], [0.22, 0.18, 0.60]]
     B = [[0.5, 0.2, 0.11, 0.19], [0.22, 0.28, 0.23, 0.27], [0.19, 0.21, 0.15, 0.45]]
