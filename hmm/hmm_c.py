@@ -1,5 +1,11 @@
-import time
+#!/usr/bin/env python3
+
+import random
 import math
+import time
+import sys
+
+epsilon = sys.float_info.epsilon  # Prevent division by zero or underflow
 
 def create_matrix(m, n, values):
     idx = 0
@@ -11,15 +17,10 @@ def create_matrix(m, n, values):
     return matrix
 
 def alpha_pass(A, B, pi, O):
+    N = len(A)  # Number of states
+    T = len(O)  # Length of observation sequence
 
-    # Number of states
-    N = len(A)
-    # Length of the observation O
-    T = len(O)
-
-    # Initialize alpha matrix (forward probabilities)
     alpha = [[0 for _ in range(N)] for _ in range(T)]
-    # Initialize scalers
     scalers = [0 for _ in range(T)]
 
     # Initialization step
@@ -27,7 +28,8 @@ def alpha_pass(A, B, pi, O):
         alpha[0][i] = pi[0][i] * B[i][O[0]]
         scalers[0] += alpha[0][i]
 
-    # Scale the alpha matrix
+    if scalers[0] <= 0:
+        scalers[0] = epsilon  # Avoid division by zero
     scalers[0] = 1 / scalers[0]
     for i in range(N):
         alpha[0][i] *= scalers[0]
@@ -35,10 +37,11 @@ def alpha_pass(A, B, pi, O):
     # Recursion step
     for t in range(1, T):
         for i in range(N):
-            alpha[t][i] = sum(alpha[t-1][j] * A[j][i] for j in range(N)) * B[i][O[t]]
+            alpha[t][i] = sum(alpha[t - 1][j] * A[j][i] for j in range(N)) * B[i][O[t]]
             scalers[t] += alpha[t][i]
 
-        # Scale the alpha matrix
+        if scalers[t] <= 0:
+            scalers[t] = epsilon  # Avoid division by zero
         scalers[t] = 1 / scalers[t]
         for i in range(N):
             alpha[t][i] *= scalers[t]
@@ -46,121 +49,93 @@ def alpha_pass(A, B, pi, O):
     return alpha, scalers
 
 def beta_pass(A, B, O, scalers):
-    
-    # Number of states
     N = len(A)
-    # Length of the observation O
     T = len(O)
 
-    # Initialize beta matrix (backward probabilities)
     beta = [[0 for _ in range(N)] for _ in range(T)]
 
     # Initialization step
     for i in range(N):
-        beta[T-1][i] = scalers[T-1]
+        beta[T - 1][i] = scalers[T - 1]
 
     # Recursion step
-    for t in range(T-2, -1, -1):
+    for t in range(T - 2, -1, -1):
         for i in range(N):
-            beta[t][i] = sum(beta[t+1][j] * B[j][O[t+1]] * A[i][j] for j in range(N))
+            beta[t][i] = sum(beta[t + 1][j] * A[i][j] * B[j][O[t + 1]] for j in range(N))
             beta[t][i] *= scalers[t]
 
     return beta
 
 def compute_log_likelihood(scalers):
-    return sum(-1 * math.log(scaler) for scaler in scalers)
+    return -sum(math.log(max(s, epsilon)) for s in scalers)
 
 def gamma_pass(A, B, pi, O):
-    
-    # Number of states
     N = len(A)
-    # Length of the observation O
     T = len(O)
 
-    # Initialize alpha and beta matrix
     alpha, scalers = alpha_pass(A, B, pi, O)
     beta = beta_pass(A, B, O, scalers)
 
-    # Initialize gamma and digamma matrix
     gamma = [[0 for _ in range(N)] for _ in range(T)]
-    digamma = [[[0 for _ in range(N)] for _ in range(N)] for _ in range(T-1)]
+    digamma = [[[0 for _ in range(N)] for _ in range(N)] for _ in range(T - 1)]
 
-    # Compute denominator
-    denominator = sum(alpha[T-1][k] for k in range(N))
-
-    # Compute gamma and digamma matrix
-    for t in range(T-1):
+    for t in range(T - 1):
         for i in range(N):
             for j in range(N):
-                digamma[t][i][j] = alpha[t][i] * A[i][j] * B[j][O[t+1]] * beta[t+1][j] / denominator
+                digamma[t][i][j] = alpha[t][i] * A[i][j] * B[j][O[t + 1]] * beta[t + 1][j]
             gamma[t][i] = sum(digamma[t][i][j] for j in range(N))
 
-    # Normalize gamma matrix
-    for t in range(T-1):
-        for i in range(N):
-            gamma[t][i] /= sum(gamma[t][j] for j in range(N))
+    for i in range(N):
+        gamma[T - 1][i] = alpha[T - 1][i]
 
     return gamma, digamma
 
 def reestimate(A, B, pi, O):
-
-    # Number of states
     N = len(A)
-    # Length of the observation O
     T = len(O)
-    # Number of possible observations
     K = len(B[0])
 
-    # Initialize new_A and new_B
+    gamma, digamma = gamma_pass(A, B, pi, O)
+
     new_A = [[0 for _ in range(N)] for _ in range(N)]
     new_B = [[0 for _ in range(K)] for _ in range(N)]
     new_pi = [[0 for _ in range(N)]]
 
-    # Initialize alpha and beta matrix
-    gamma, digamma = gamma_pass(A, B, pi, O)
-
-    # Re-estimate A, B, and pi
-    for i in range(N):
-        for j in range(N):
-            new_A[i][j] = sum(digamma[t][i][j] for t in range(T-1)) / sum(gamma[t][i] for t in range(T-1))
-
-    for i in range(N):
-        for k in range(K):
-            new_B[i][k] = sum(gamma[t][i] for t in range(T-1) if O[t] == k) / sum(gamma[t][i] for t in range(T-1))
-
     for i in range(N):
         new_pi[0][i] = gamma[0][i]
 
+        for j in range(N):
+            numerator = sum(digamma[t][i][j] for t in range(T - 1))
+            denominator = sum(gamma[t][i] for t in range(T - 1)) + epsilon
+            new_A[i][j] = numerator / denominator
+
+        for k in range(K):
+            numerator = sum(gamma[t][i] for t in range(T) if O[t] == k)
+            denominator = sum(gamma[t][i] for t in range(T)) + epsilon
+            new_B[i][k] = numerator / denominator
+
     return new_A, new_B, new_pi
 
-# Output the estimated transition matrix and emission matrix
 def solve(A, B, pi, O):
-
-    log_likelihood = -1e9
+    log_likelihood = float("-inf")
     threshold = 1e-6
     time_start = time.time()
-    timeout = 0.8
+    timeout = 0.5
     logs = []
 
     iter = 0
-
-    # Initialize new_A and new_B
     while True:
         new_A, new_B, new_pi = reestimate(A, B, pi, O)
         new_log_likelihood = compute_log_likelihood(alpha_pass(A, B, pi, O)[1])
         logs.append(new_log_likelihood)
 
-        if new_log_likelihood - log_likelihood < threshold or time.time() - time_start > timeout:
+        if abs(new_log_likelihood - log_likelihood) < threshold or time.time() - time_start > timeout:
             break
 
-        A = new_A
-        B = new_B
-        pi = new_pi
+        A, B, pi = new_A, new_B, new_pi
         log_likelihood = new_log_likelihood
         iter += 1
 
-    print("Number of iterations:", iter)
-    print("Time taken:", time.time() - time_start)
     return new_A, new_B
 
 
