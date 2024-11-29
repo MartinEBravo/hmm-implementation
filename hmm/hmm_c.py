@@ -163,7 +163,7 @@ def solve(A, B, pi, O):
     return new_A, new_B
 
 
-def solve_N1000():
+def question_7():
 
     file_1 = "hmm_c_N1000.in"
 
