@@ -280,9 +280,9 @@ def test_10():
 
     # baum-welch algorithm with uniform distribution
     print("Uniform distribution")
-    A = [[0.33, 0.33, 0.33], [0.33, 0.33, 0.33], [0.33, 0.33, 0.33]]
-    B = [[0.25, 0.25, 0.25, 0.25], [0.25, 0.25, 0.25, 0.25], [0.25, 0.25, 0.25, 0.25]]
-    pi = [[0.33, 0.33, 0.33]]
+    A = [[random.random() for _ in range(3)] for _ in range(3)]
+    B = [[random.random() for _ in range(4)] for _ in range(3)]
+    pi = [[random.random() for _ in range(3)]]
 
     new_A, new_B = solve(A, B, pi, O)
 

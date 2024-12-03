@@ -32,12 +32,18 @@ def create_matrix(m, n, values):
 def solve(A, B, pi):
 
     # Multiply matrices in the order: pi * A * B
-    result = matrix_multiply(pi, A)
-    result = matrix_multiply(result, B)
+
+    # pi (1 x N) x A (N x N) x B (N x K) = result (1 x K)
+    result = matrix_multiply(pi, A) # (1 x N) x (N x N) = (1 x N)
+    result = matrix_multiply(result, B) # (1 x N) x (N x K) = (1 x K)
 
     # Dimensions of the resulting matrix
     m, n = matrix_dimensions(result)
 
+    # A_i_j = P(X_t+1 = j | X_t = i) (N x N)
+    # B_i_j = P(O_t = j | X_t = i) (N x K)
+    # pi_i = P(X_1 = i)  (1 x N)
+    # result_i = P(O_t = i) (1 x K)
     return m, n, result
 
 if __name__ == "__main__":

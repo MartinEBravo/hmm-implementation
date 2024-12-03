@@ -31,6 +31,7 @@ def create_matrix(m, n, values):
 def solve(A, B, pi, O):
     N = len(A)  # Number of states
     K = len(O)  # Length of the observation O
+    T = len(O)  # Length of the observation sequence
 
     # Initialize alpha matrix (forward probabilities)
     alpha = [[0 for _ in range(N)] for _ in range(K)]
@@ -40,12 +41,12 @@ def solve(A, B, pi, O):
         alpha[0][i] = B[i][O[0]] * pi[0][i]
 
     # Recursion step
-    for t in range(1, K):
+    for t in range(1, T):
         for i in range(N):
-            alpha[t][i] = B[i][O[t]] * sum(A[j][i] * alpha[t-1][j] for j in range(N))
+            alpha[t][i] = sum(alpha[t - 1][j] * A[j][i] for j in range(N)) * B[i][O[t]]
 
     # Termination step
-    p_O = sum(alpha[K-1][i] for i in range(N))
+    p_O = sum(alpha[T - 1][i] for i in range(N))
     return p_O
 
 if __name__ == "__main__":
